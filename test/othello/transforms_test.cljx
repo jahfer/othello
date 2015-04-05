@@ -102,6 +102,8 @@
   [(rest ops1) ops2 [(conj (first ops') (first ops1))
                      (conj (first ops') (o/->Op ::o/ret 1))]])
 
+(derive ::img :othello.operations/hello)
+
 (deftest wacky-test
   (testing "yeah..."
     (let [a (oplist ::o/ret 1 ::img "http://google.com/logo.png")

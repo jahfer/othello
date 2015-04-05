@@ -43,6 +43,8 @@
 (defmethod othello.composers/compose-ops [::img ::o/del] [ops1 ops2 out]
   [(rest ops1) (rest ops2) out])
 
+(derive ::img :othello.operations/hello)
+
 (deftest wacky-test
   (testing "retain over custom operation"
     (let [comp (compose (oplist ::o/ret 1 ::img "http://google.com/logo.png")
