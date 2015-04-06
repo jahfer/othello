@@ -1,4 +1,4 @@
-# ◐thello
+# ◐thello [![Build Status](https://travis-ci.org/jahfer/othello.svg)](https://travis-ci.org/jahfer/othello)
 
 A clojure/clojurescript library to handle composition and transformation of operations, using [Operational Transform](https://en.wikipedia.org/wiki/Operational_transformation) (OT).
 
