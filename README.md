@@ -120,14 +120,14 @@ While laborious and confusing, it is definitely possible to add custom operation
 
 `ot.transforms/transform-ops` is the first method, and defines how the transform function should handle your operation. The method recieves three arguments: `a`, `b` and `ops'`. The first two arguments are the competing operation lists, and the third is an output vector containing the two resulting operation lists, `a'` and `b'`.
 
-The following is an example of a custom `::img` operation.
+The following is an example of the methods needed for a basic `::img` operation. Several more methods are needed for all edge cases with other operations, but this provides a simple example.
 
 ```clj
 (derive ::img ::ops/operation)
 
 (defmethod othello.transforms/transform-ops [::img ::ops/operation] [a b ops']
   [(rest a) b [(conj (first ops') (first a))
-                     (conj (first ops') (ops/->Op ::ops/ret 1))]])
+               (conj (first ops') (ops/->Op ::ops/ret 1))]])
 ```
 
 This follows the same rules as `:othello.operations/ins`. For the first argument, we return the tail of the list, since we're "consuming" the `::img` operation. The second argument remains untouched since we didn't inspect it at all. The final argument is the most interesting; this is our "application" of the transformation on both sides. For the side that is receiving our new `::img` operation, we want to pass it along, and we do so by `conj`ing the `::img` operation onto the beginning of `ops'`. For the side that sent our new operation, we just need to retain over it, and treat it as a length of `1`.
@@ -150,6 +150,26 @@ In the first method in the above code, we define a composition of our `::img`, a
 In the second method, we "apply" the delete by passing back the tail of the two operation lists, and don't `conj` anything to the `out`, since the delete action cancelled out our `::img` insertion.
 
 **Note: The order of operations is important; `[::img ::ops/ret]` is _not_ the same as `[::ops/ret ::img]`. The second type is the operation applied after the first operation.**
+
+Applying the above code lets us use our new `::img` operation like any other:
+
+```clj
+user> (compose (ops/oplist ::ops/ret 1 ::img "http://google.com/logo.png") (ops/oplist ::ops/ret 2 ::ops/ins "b"))
+;; => [{::ops/ret 1} {::img "http://google.com/logo.png"} {::ops/ins "b"}]
+```
+
+```clj
+user> (def a (ops/oplist ::ops/ret 1 ::img "http://google.com/logo.png"))
+;; => #'user/a
+user (def b (ops/oplist ::ops/ret 1 ::ops/ins "b"))
+;; => #'user/b
+user> (def xf (xforms/transform a b))
+;; => #'user/xf
+user> (first xf)
+;; => [{::ops/ret 1} {::img "http://google.com/logo.png} {::ops/ret 1}]
+user> (second xf)
+;; => [{::ops/ret 2} {::ops/ins "b"}]
+```
 
 ## License
 
