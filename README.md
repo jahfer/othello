@@ -164,7 +164,7 @@ user (def b (ops/oplist ::ops/ret 1 ::ops/ins "b"))
 user> (def xf (xforms/transform a b))
 ;; => #'user/xf
 user> (first xf)
-;; => [{::ops/ret 1} {::img "http://google.com/logo.png} {::ops/ret 1}]
+;; => [{::ops/ret 1} {::img "http://google.com/logo.png"} {::ops/ret 1}]
 user> (second xf)
 ;; => [{::ops/ret 2} {::ops/ins "b"}]
 ```
