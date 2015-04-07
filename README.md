@@ -1,5 +1,7 @@
 # ◐thello [![Build Status](https://travis-ci.org/jahfer/othello.svg)](https://travis-ci.org/jahfer/othello)
 
+[![Clojars Project](http://clojars.org/othello/latest-version.svg)](http://clojars.org/othello)
+
 A clojure/clojurescript library to handle composition and transformation of operations, using [Operational Transform](https://en.wikipedia.org/wiki/Operational_transformation) (OT).
 
 ## Usage
