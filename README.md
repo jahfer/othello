@@ -48,11 +48,7 @@ user> (ops/oplist ::ops/ret 4 ::ops/ins "b")
 ;; => [#othello.operations.Op{:type :othello.operations/ret, :val 4} #othello.operations.Op{:type :othello.operations/ins, :val "b"}]
 ```
 
-From here on out, I'll be using a shorthand to describe the operations:
-
-```clj
-#othello.operations.Op{:type :othello.operations/ret, :val 2} -> {::ops/ret 2}
-```
+From here on out, I'll be using a shorthand to describe the operations: `{::ops/ret 2}` instead of `#othello.operations.Op{:type :othello.operations/ret, :val 2}`
 
 ### Transformation
 
