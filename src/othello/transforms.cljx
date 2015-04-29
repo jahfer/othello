@@ -19,11 +19,12 @@
 
 (defn compress [ops]
   (reduce (fn [acc op]
-            (if (every? o/retain? (list op (peek acc)))
-              (update-in acc [(-> acc count dec) :val] #(+ % (:val op)))
-              (conj acc op)))
+            (if (and (= ::o/ret (:type op)) (zero? (:val op)))
+              acc
+              (if (every? o/retain? (list op (peek acc)))
+                (update-in acc [(-> acc count dec) :val] #(+ % (:val op)))
+                (conj acc op))))
           [] ops))
-
 
 (defmulti transform-ops
   (fn [ops1 ops2 _]

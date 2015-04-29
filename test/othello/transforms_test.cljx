@@ -95,7 +95,9 @@
           result1 (compress ops1)
           result2 (compress ops2)]
       (is (= result1 (oplist ::o/ret 3 ::o/ins "a" ::o/ret 4)))
-      (is (= result2 (oplist ::o/ret 4 ::o/ins "b"))))))
+      (is (= result2 (oplist ::o/ret 4 ::o/ins "b")))))
+  (testing "#compress will remove retains of length 0"
+    (is (= (oplist ::o/ins "a") (compress (oplist ::o/ret 0 ::o/ins "a" ::o/ret 0))))))
 
 
 (defmethod othello.transforms/transform-ops [::img ::o/operation] [ops1 ops2 ops']
