@@ -5,6 +5,12 @@
             [clojure.string :as str]
             #+cljs [cljs.core.match :refer-macros [match]]))
 
+(def node-hierarchy (-> (make-hierarchy)
+                        (derive ::text  ::nodeType)
+                        (derive ::o/ins ::text)
+                        (derive ::o/del ::text)
+                        (derive ::o/ret ::text)))
+
 (defn apply-ins [{c :val} doc]
   (str c doc))
 
@@ -27,6 +33,15 @@
                       :ops nil}
            :else   {:tail doc
                     :ops (conj (rest ops) (o/->Op ::o/ret 1))})))
+
+(defn parse-ops [ops]
+  (reduce (fn [acc op]
+            (let [last-node (peek acc)]
+              (if (and (not-empty last-node)
+                       (isa? node-hierarchy (:type op) (:nodeType last-node)))
+                (conj (pop acc) (update-in last-node [:operations] conj op))
+                (conj acc {:nodeType (or (first (parents node-hierarchy (:type op))) (:type op))
+                           :operations [op]})))) [] ops))
 
 (defn apply-ops [document oplist]
   (loop [last-head "", doc document, ops oplist]

@@ -35,3 +35,14 @@
   (testing "Applying a delete operation results in the correct end document"
     (let [result (documents/apply-ops document op-jerry)]
       (is (= result "Ram")))))
+
+(deftest parse-ops-test
+  (testing "#parse-ops returns a data structure of like nodes"
+    (let [ops (o/oplist ::o/ins "a" ::o/ret 5 ::o/del 1 ::fooLink "http://google.com" ::o/ret 2 ::o/ins "b")]
+      (is (= (documents/parse-ops ops)
+             [{:nodeType ::documents/text :operations [(o/->Op ::o/ins "a")
+                                                       (o/->Op ::o/ret 5)
+                                                       (o/->Op ::o/del 1)]}
+              {:nodeType ::fooLink :operations [(o/->Op ::fooLink "http://google.com")]}
+              {:nodeType ::documents/text :operations [(o/->Op ::o/ret 2)
+                                                       (o/->Op ::o/ins "b")]}])))))
