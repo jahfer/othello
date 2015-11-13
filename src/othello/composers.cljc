@@ -1,10 +1,10 @@
 (ns othello.composers
-  #+clj (:use[clojure.core.match :only (match)])
+  #?(:clj (:use[clojure.core.match :only (match)]))
   (:require [othello.operations :as o]
             [othello.transforms :as t]
-            #+cljs [cljs.core.match :refer-macros [match]]))
+            #?(:cljs [cljs.core.match :refer-macros [match]])))
 
-#+cljs (enable-console-print!)
+#?(:cljs (enable-console-print!))
 
 (defmulti compose-ops
   (fn [ops1 ops2 _]
@@ -46,5 +46,5 @@
         (recur ops1 ops2 composed))
       composed)))
 
-#+cljs (defn composeJS [a b]
-         (o/asJS (compose a b)))
+#?(:cljs (defn composeJS [a b]
+         (o/asJS (compose a b))))

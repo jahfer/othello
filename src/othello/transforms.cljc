@@ -1,6 +1,6 @@
 (ns othello.transforms
-  (:require #+clj [clojure.core.match :refer [match]]
-            #+cljs [cljs.core.match :refer-macros [match]]
+  (:require #?(:clj [clojure.core.match :refer [match]]
+               :cljs [cljs.core.match :refer-macros [match]])
             [othello.operations :as o]))
 
 (defn retain [value]
@@ -26,8 +26,8 @@
                            (conj acc op))))
                      [] ops) (meta ops)))
 
-#+cljs (defn compressJS [ops]
-         (o/asJS (compress ops)))
+#?(:cljs (defn compressJS [ops]
+         (o/asJS (compress ops))))
 
 (defmulti transform-ops
   (fn [ops1 ops2 _]
@@ -80,8 +80,8 @@
         (recur ops1 ops2 ops'))
       (map compress ops'))))
 
-#+cljs (defn ^:export transformJS [a b]
-         (clj->js (map o/asJS (transform a b))))
+#?(:cljs (defn ^:export transformJS [a b]
+         (clj->js (map o/asJS (transform a b)))))
 
 (defn simplify [ops]
   (let [first-op (first ops)]

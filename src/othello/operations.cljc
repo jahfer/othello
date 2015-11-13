@@ -2,7 +2,7 @@
 
 (defrecord Op [type val])
 
-#+cljs (enable-console-print!)
+#?(:cljs (enable-console-print!))
 
 (derive ::ins ::operation)
 (derive ::del ::operation)
@@ -12,7 +12,7 @@
 (defn oplist [& operations]
   (mapv #(apply ->Op %) (partition 2 operations)))
 
-#+cljs (defn ^:export oplistJS [arr]
+#?(:cljs (defn ^:export oplistJS [arr]
          (let [coll (js->clj arr :keywordize-keys true)
                ops (flatten (map (fn [op]
                                (cond
@@ -20,15 +20,15 @@
                                  (contains? op :insert) [::ins (:insert op)]
                                  (contains? op :delete) [::del (:delete op)]))
                              coll))]
-           (apply oplist ops)))
+           (apply oplist ops))))
 
-#+cljs (defn ^:export asJS [coll]
+#?(:cljs (defn ^:export asJS [coll]
          (clj->js (map (fn [op]
                          (let [key (condp = (:type op)
                                      ::ret "retain"
                                      ::ins "insert"
                                      ::del "delete")]
-                           {key (:val op)})) coll)))
+                           {key (:val op)})) coll))))
 
 (defn print-ops [operations]
   (pr-str (mapcat #(list (:type %) (:val %)) operations)))
