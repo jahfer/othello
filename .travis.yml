@@ -4,3 +4,5 @@ install:
   - chmod 755 boot
   - ./boot -V
 script: ./boot testing test test-cljs
+jdk:
+  - oraclejdk8
