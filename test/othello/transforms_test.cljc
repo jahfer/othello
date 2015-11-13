@@ -1,11 +1,10 @@
 (ns othello.transforms-test
   (:use [othello.transforms :only [transform compress retain]])
-  (:require #+clj [clojure.test :as t :refer (is deftest testing)]
-            #+cljs [cemerick.cljs.test :as t :refer-macros [is deftest testing]]
-            #+clj [clojure.test.check.properties :as prop]
-            #+cljs [cljs.test.check.properties :as prop :refer-macros [for-all]]
-            #+clj [clojure.test.check.clojure-test :refer [defspec]]
-            #+cljs [cljs.test.check.cljs-test :refer-macros [defspec]]
+  (:require #?(:clj  [clojure.test :as t :refer (is deftest testing)]
+               :cljs [cljs.test    :as t :refer-macros [is deftest testing]])
+            #?(:clj  [clojure.test.check.clojure-test :refer [defspec]]
+               :cljs [clojure.test.check.clojure-test :refer-macros [defspec]])
+            [clojure.test.check.properties :as prop]
             [othello.lib.test-check-helper :as tch]
             [othello.operations :as o :refer [oplist ->Op]]
             [othello.documents :as documents]))
@@ -63,7 +62,7 @@
   (testing "Transforming two operations"
     (let [expected-a' (oplist ::o/ret 2 ::o/ins "a" ::o/ret 1)
           expected-b' (oplist ::o/ret 3 ::o/ins "t")]
-            (assert-transforms "Hi" op-tom op-jerry expected-a' expected-b'))))
+         (assert-transforms "Hi" op-tom op-jerry expected-a' expected-b'))))
 
 (deftest delete-test
   (testing "Transforming a delete operation with an insert operation"

@@ -1,9 +1,9 @@
 (ns othello.documents
-  #+clj (:use[clojure.core.match :only (match)])
+  #?(:clj (:use[clojure.core.match :only (match)]))
   (:require [othello.operations :as o]
             [othello.transforms :as transforms]
             [clojure.string :as str]
-            #+cljs [cljs.core.match :refer-macros [match]]))
+            #?(:cljs [cljs.core.match :refer-macros [match]])))
 
 (def node-hierarchy (-> (make-hierarchy)
                         (derive ::text  ::nodeType)

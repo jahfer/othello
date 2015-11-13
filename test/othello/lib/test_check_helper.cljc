@@ -1,10 +1,8 @@
 (ns othello.lib.test-check-helper
-  (:require #+clj [clojure.test.check :as tc]
-            #+cljs [cljs.test.check :as tc]
-            #+clj [clojure.test.check.generators :as gen]
-            #+cljs [cljs.test.check.generators :as gen]
-            #+clj [clojure.core.match :refer [match]]
-            #+cljs [cljs.core.match :refer-macros [match]]
+  (:require [clojure.test.check :as tc]
+            [clojure.test.check.generators :as gen]
+            #?(:clj [clojure.core.match :refer [match]])
+            #?(:cljs [cljs.core.match :refer-macros [match]])
             [othello.operations :as o :refer [oplist ->Op]]
             [othello.transforms :as transforms :refer [compress]]))
 

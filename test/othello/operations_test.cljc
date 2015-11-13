@@ -1,6 +1,6 @@
 (ns othello.operations-test
-  (:require #+clj [clojure.test :as t :refer (is deftest testing)]
-            #+cljs [cemerick.cljs.test :as t :refer-macros [is deftest testing]]
+  (:require #?(:clj  [clojure.test :as t :refer (is deftest testing)]
+               :cljs [cljs.test :as t :refer-macros [is deftest testing]])
             [othello.operations :as o]))
 
 (def document "go")
