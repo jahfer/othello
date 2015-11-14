@@ -3,21 +3,19 @@
             [othello.transforms :as transforms]
             [othello.documents  :as documents]))
 
-;; relying on meta doesn't work when flattening operations into history :(
+(defrecord OperationGroup [id parent-id operations])
 
 (defn- append-to-history!
   [container operations]
-  (swap! (:history container) into operations)
+  (swap! (:history container) conj operations)
   operations)
 
 (defn- operations-since-id [id base]
-  (take-while #(not= (:id (meta %)) id)))
+  (map :operations (take-while #(not= id (:id %)) base)))
 
 (defn- descendent?
-  [parent child]
-  (let [parent-id (:parent-id (meta child))]
-    (println parent-id)
-    (some #(= parent-id %) (map #(:id (meta %)) parent))))
+  [maybe-parents {:keys [parent-id] :as child}]
+  (some #(= parent-id %) (map :id maybe-parents)))
 
 (defn read-history
   [container]
@@ -27,44 +25,48 @@
   [container]
   (deref (:document container)))
 
+(defn- apply-tag [container operations]
+  (update operations :id (:tag-fn container)))
+
 (defn build-container
-  []
-  {:history (atom '()) :document (atom "")})
+  [tag-fn]
+  {:history (atom '()) :document (atom "") :tag-fn tag-fn})
 
 (defn read-text
   [container]
-  (let [history (reverse (read-history container))
+  (let [history (reverse (map :operations (read-history container)))
         operations (if (> (count history) 1)
                     (reduce composers/compose history)
-                    history)]
+                    (first history))]
     (swap! (:document container) documents/apply-ops operations)))
 
 (defn rebase
-  [from onto]
+  [{:keys [parent-id operations] :as from} onto]
   (if (seq onto)
     (if (descendent? onto from)
-      (let [from-metadata (meta from)
-            parent-id (:parent-id from-metadata)]
-        (->> (operations-since-id parent-id onto)
-             (reduce composers/compose)
-             (transforms/transform from)
-             (first)
-             #(with-meta % from-metadata)))
-      (println "Rejected operation. Not parented on known history"))
+      (let [missed-operations (operations-since-id parent-id onto)]
+        (if (seq missed-operations)
+          (->> missed-operations
+            (reduce composers/compose)
+            (transforms/transform operations)
+            (first)
+            (assoc from :operations))
+          from))
+      (println "Rejected operation. No common ancestor found."))
     from))
 
 (defn append!
-  ([container operations]
-   (->> container
-     (read-history)
-     (rebase operations)
-     (append-to-history! container)))
-  ([container operations f]
-   (apply f (append! container operations))))
+  "Applies an OperationGroup to an existing container. Takes f which generates a tag for the persisted operation."
+  [container operations]
+  (->> container
+    (read-history)
+    (rebase operations)
+    (apply-tag container)
+    (append-to-history! container)))
 
 ;; -----------
 
 (comment
  (let [container (build-container)]
-   (append! container operation #(persist-to-db! %))
+   (append! container operation)
    (read-text container)))
