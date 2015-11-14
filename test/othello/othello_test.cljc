@@ -1,4 +1,4 @@
-(ns othello.container-test
+(ns othello.othello-test
   (:require [othello.othello    :as othello]
             [othello.operations :as o]
             #?(:clj  [clojure.test :as t :refer (is deftest testing)]
