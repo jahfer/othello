@@ -28,8 +28,12 @@
 (defn- apply-tag [container operations]
   (update operations :id (:tag-fn container)))
 
+(defn- default-tag-fn []
+  (let [global-id-counter (atom 0)]
+    (fn [_] (swap! global-id-counter inc))))
+
 (defn build-container
-  [tag-fn]
+  [& {:keys [tag-fn] :or {tag-fn (default-tag-fn)}}]
   {:history (atom '()) :document (atom "") :tag-fn tag-fn})
 
 (defn read-text
