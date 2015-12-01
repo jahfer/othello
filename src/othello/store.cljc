@@ -1,4 +1,4 @@
-(ns othello.othello
+(ns othello.store
   (:require [othello.composers  :as composers]
             [othello.transforms :as transforms]
             [othello.documents  :as documents]))
@@ -60,7 +60,7 @@
     from))
 
 (defn append!
-  "Applies an OperationGroup to an existing container. Takes f which generates a tag for the persisted operation."
+  "Applies an OperationGroup to an existing container."
   [container operations]
   (->> container
     (read-history)
@@ -71,6 +71,6 @@
 ;; -----------
 
 (comment
- (let [container (build-container)]
-   (append! container operation)
-   (read-text container)))
+ (let [store (build-container)]
+   (append! store operation)
+   (read-text store)))
