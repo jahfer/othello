@@ -6,16 +6,12 @@
 (defrecord OperationGroup [id parent-id operations])
 
 (defn- append-to-history!
-  [container operations]
-  (swap! (:history container) conj operations)
-  operations)
-
-(defn- operations-since-id [id base]
-  (map :operations (take-while #(not= id (:id %)) base)))
-
-(defn- descendent?
-  [maybe-parents {:keys [parent-id] :as child}]
-  (some #(= parent-id %) (map :id maybe-parents)))
+  [container new-operations]
+  (swap! (:history container) (fn [{:keys [operations index] :as history}]
+                                (-> history
+                                    (update-in [:operations] conj (:operations new-operations))
+                                    (update-in [:index] assoc (:id new-operations) (count operations)))))
+  new-operations)
 
 (defn read-history
   [container]
@@ -34,21 +30,24 @@
 
 (defn build-container
   [& {:keys [tag-fn] :or {tag-fn (default-tag-fn)}}]
-  {:history (atom '()) :document (atom "") :tag-fn tag-fn})
+  {:history (atom {:index {} :operations []})
+   :document (atom "")
+   :tag-fn tag-fn})
 
 (defn read-text
   [container]
-  (let [history (reverse (map :operations (read-history container)))
+  (let [history (:operations (read-history container))
         operations (if (> (count history) 1)
                     (reduce composers/compose history)
                     (first history))]
     (swap! (:document container) documents/apply-ops operations)))
 
 (defn rebase
-  [{:keys [parent-id operations] :as from} onto]
-  (if (seq onto)
-    (if (descendent? onto from)
-      (let [missed-operations (operations-since-id parent-id onto)]
+  [{:keys [parent-id operations] :as from} {:keys [index] :as history}]
+  (if (seq (:operations history))
+    (if (contains? index parent-id)
+      (let [history-ops (:operations history)
+            missed-operations (->> parent-id (get index) inc (subvec history-ops))]
         (if (seq missed-operations)
           (->> missed-operations
             (reduce composers/compose)

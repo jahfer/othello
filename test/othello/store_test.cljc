@@ -34,4 +34,14 @@
       (store/append! container common-ancestor)
       (store/append! container client-a)
       (store/append! container client-b)
-      (is (= "goat" (store/read-text container))))))
+      (is (= "goat" (store/read-text container)))))
+
+  (testing "#append! returns the transformed operation"
+    (let [container (store/build-container)
+          root (store/->OperationGroup 1 nil (o/oplist ::o/ins "c"))
+          client-a (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "a"))
+          client-b (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "b"))
+          expected (store/->OperationGroup 3 2 (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1))]
+      (store/append! container root)
+      (store/append! container client-a)
+      (is (= expected (store/append! container client-b))))))
