@@ -26,9 +26,6 @@
                            (conj acc op))))
                      [] ops) (meta ops)))
 
-#?(:cljs (defn compressJS [ops]
-         (o/asJS (compress ops))))
-
 (defmulti transform-ops
   (fn [ops1 ops2 _]
     (let [first-type  (-> ops1 first (:type ::o/empty))
@@ -79,9 +76,6 @@
       (let [[ops1 ops2 ops'] (transform-ops ops1 ops2 ops')]
         (recur ops1 ops2 ops'))
       (map compress ops'))))
-
-#?(:cljs (defn ^:export transformJS [a b]
-         (clj->js (map o/asJS (transform a b)))))
 
 (defn simplify [ops]
   (let [first-op (first ops)]
