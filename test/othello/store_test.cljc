@@ -7,7 +7,7 @@
 (deftest build-container
   (testing "#build-container returns a map of :history and :document"
     (let [container (store/build-container)]
-      (is (= [:history :document :tag-fn] (vec (keys container)))))))
+      (is (= [:history :tag-fn] (vec (keys container)))))))
 
 (deftest append-test
   (testing "#append! applies an operation to an empty container"
@@ -41,7 +41,20 @@
           root (store/->OperationGroup 1 nil (o/oplist ::o/ins "c"))
           client-a (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "a"))
           client-b (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "b"))
-          expected (store/->OperationGroup 3 2 (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1))]
+          expected (store/->OperationGroup 3 1 (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1))]
       (store/append! container root)
       (store/append! container client-a)
       (is (= expected (store/append! container client-b))))))
+
+(deftest read-text
+  (testing "#read-text returns the expected text"
+    (let [container (store/build-container)]
+      (store/append! container (store/->OperationGroup nil nil (o/oplist ::o/ins "a")))
+      (is (= "a" (store/read-text container)))))
+
+  (testing "#read-text is safe to call multiple times"
+    (let [container (store/build-container)]
+      (store/append! container (store/->OperationGroup 1 nil (o/oplist ::o/ins "1")))
+      (store/append! container (store/->OperationGroup nil 1 (o/oplist ::o/ret 1 ::o/ins "2")))
+      (is (= "12" (store/read-text container)))
+      (is (= "12" (store/read-text container))))))
