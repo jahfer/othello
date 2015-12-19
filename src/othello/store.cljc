@@ -13,7 +13,7 @@
   (operations-since-id [self id])
   (rebase [self new-tip]))
 
-(deftype DefaultHistory [index operations]
+(deftype DefaultHistory [index operations tag-fn]
   History
   (operations-since-id [self id]
     (subvec operations (inc (get index id))))
@@ -32,10 +32,12 @@
   clojure.lang.IPersistentCollection
   (seq [self] (if (seq operations) self nil))
   (cons [self x]
-    (DefaultHistory.
-     (assoc (.index self) (:id x) (count operations))
-     (conj (.operations self) (:operations x))))
-  (empty [self] (DefaultHistory. {} []))
+    (let [rebased (update (rebase self x) :id tag-fn)]
+      (DefaultHistory.
+       (assoc (.index self) (:id rebased) (count operations))
+       (conj (.operations self) (:operations rebased))
+       tag-fn)))
+  (empty [self] (DefaultHistory. {} [] tag-fn))
   (equiv [self o]
     (if (instance? DefaultHistory o)
       (and (= index (.index o))
@@ -46,7 +48,7 @@
   (read-text [self])
   (append! [self operations]))
 
-(defrecord DefaultContainer [history tag-fn]
+(defrecord DefaultContainer [history]
   Container
   (read-text [self]
     (let [history' (.operations @history)
@@ -54,19 +56,15 @@
                        (reduce composers/compose history')
                        (first history'))]
       (documents/apply-ops "" operations)))
-
-  ;; Can we move this into othello.store.History/conj?
+  ;; TODO: Need to return the rebased object with id/parent-id/operations
   (append! [self operations]
-    (let [rebased-ops (update (rebase @history operations) :id tag-fn)]
-      (swap! history conj rebased-ops)
-      rebased-ops)))
+    (swap! history conj operations)))
 
 (defn build-default-history []
-  (DefaultHistory. {} []))
+  (DefaultHistory. {} [] (default-tag-fn)))
 
-(defn build-container
-  [& {:keys [tag-fn] :or {tag-fn (default-tag-fn)}}]
-  (->DefaultContainer (atom (build-default-history)) tag-fn))
+(defn build-container []
+  (->DefaultContainer (atom (build-default-history))))
 
 ;; -----------
 
