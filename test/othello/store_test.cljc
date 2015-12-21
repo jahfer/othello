@@ -5,53 +5,57 @@
                :cljs [cljs.test    :as t :refer-macros [is deftest testing]])))
 
 (deftest append-test
-  (testing "#append! applies an operation to an empty container"
-    (let [container  (store/build-container)
+  (testing "#conj applies an operation to an empty container"
+    (let [container  (atom (store/build-document))
           operations (store/->OperationGroup nil nil (o/oplist ::o/ins "a"))]
-      (store/append! container operations)
-      (is (= "a" (store/read-text container)))))
+      (swap! container conj operations)
+      (is (= "a" (store/as-string @container)))))
 
-  (testing "#append! applies an operation on top of an existing history"
-    (let [container (store/build-container)
-          op1 (store/->OperationGroup nil nil (o/oplist ::o/ins "a"))
-          op2 (store/->OperationGroup nil 1 (o/oplist ::o/ret 1 ::o/ins "c" ::o/ins "k"))]
-      (store/append! container op1)
-      (store/append! container op2)
-      (is (= "ack" (store/read-text container)))))
+  (testing "#conj applies an operation on top of an existing history"
+    (let [container (atom (store/build-document))
+          op1 (store/operation-group (o/oplist ::o/ins "a"))
+          op2 (store/operation-group (o/oplist ::o/ret 1 ::o/ins "c" ::o/ins "k") :parent-id 1)]
+      (swap! container conj op1)
+      (swap! container conj op2)
+      (is (= "ack" (store/as-string @container)))))
 
-  (testing "#append! rebases an operation on changes since last parent"
-    (let [container       (store/build-container)
-          root            (store/->OperationGroup 1   nil                   (o/oplist ::o/ins "g"))
-          common-ancestor (store/->OperationGroup 2   (:id root)            (o/oplist ::o/ret 1 ::o/ins "o"))
-          client-a        (store/->OperationGroup nil (:id common-ancestor) (o/oplist ::o/ret 2 ::o/ins "t"))
-          client-b        (store/->OperationGroup nil (:id common-ancestor) (o/oplist ::o/ret 2 ::o/ins "a"))]
-      (store/append! container root)
-      (store/append! container common-ancestor)
-      (store/append! container client-a)
-      (store/append! container client-b)
-      (is (= "goat" (store/read-text container)))))
+  (testing "#conj rebases an operation on changes since last parent"
+    (let [container       (atom (store/build-document))
+          root            (store/operation-group (o/oplist ::o/ins "g") :id 1)
+          common-ancestor (store/operation-group (o/oplist ::o/ret 1 ::o/ins "o") :parent-id (:id root) :id 2)
+          client-a        (store/operation-group (o/oplist ::o/ret 2 ::o/ins "t") :parent-id (:id common-ancestor))
+          client-b        (store/operation-group (o/oplist ::o/ret 2 ::o/ins "a") :parent-id (:id common-ancestor))]
+      (swap! container conj root)
+      (swap! container conj common-ancestor)
+      (swap! container conj client-a)
+      (swap! container conj client-b)
+      (is (= "goat" (store/as-string @container)))))
 
-  (testing "#append! returns the history object"
-    (let [container (store/build-container)
-          root (store/->OperationGroup 1 nil (o/oplist ::o/ins "c"))
-          client-a (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "a"))
-          client-b (store/->OperationGroup nil (:id root) (o/oplist ::o/ret 1 ::o/ins "b"))
+  (testing "#conj returns the history object"
+    (let [container (atom (store/build-document))
+          root (store/operation-group (o/oplist ::o/ins "c") :id 1)
+          client-a (store/operation-group (o/oplist ::o/ret 1 ::o/ins "a") :parent-id (:id root))
+          client-b (store/operation-group (o/oplist ::o/ret 1 ::o/ins "b") :parent-id (:id root))
           ;; expected (store/->OperationGroup 3 1 (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1))
-          expected (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1)
-          ]
-      (store/append! container root)
-      (store/append! container client-a)
-      (is (= expected (last (.operations (store/append! container client-b))))))))
+          expected (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1)]
+      (swap! container conj root)
+      (swap! container conj client-a)
+      (swap! container conj client-b)
+      (is (= expected (last (.operations @container)))))))
 
-(deftest read-text
-  (testing "#read-text returns the expected text"
-    (let [container (store/build-container)]
-      (store/append! container (store/->OperationGroup nil nil (o/oplist ::o/ins "a")))
-      (is (= "a" (store/read-text container)))))
+(deftest as-string
+  (testing "#as-string returns the expected text"
+    (let [container (atom (store/build-document))]
+      (swap! container conj (store/operation-group (o/oplist ::o/ins "a")))
+      (is (= "a" (store/as-string @container)))))
 
-  (testing "#read-text is safe to call multiple times"
-    (let [container (store/build-container)]
-      (store/append! container (store/->OperationGroup 1 nil (o/oplist ::o/ins "1")))
-      (store/append! container (store/->OperationGroup nil 1 (o/oplist ::o/ret 1 ::o/ins "2")))
-      (is (= "12" (store/read-text container)))
-      (is (= "12" (store/read-text container))))))
+  (testing "#as-string is safe to call multiple times"
+    (let [container (atom (store/build-document))]
+      (swap! container conj (store/operation-group (o/oplist ::o/ins "1") :id 1))
+      (swap! container conj (store/operation-group (o/oplist ::o/ret 1 ::o/ins "2") :parent-id 1))
+      (is (= "12" (store/as-string @container)))
+      (is (= "12" (store/as-string @container)))))
+
+  (testing "#as-string returns nil for an empty container"
+    (let [container (atom (store/build-document))]
+      (is (nil? (store/as-string @container))))))
