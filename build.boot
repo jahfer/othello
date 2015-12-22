@@ -15,6 +15,7 @@
          '[adzerk.bootlaces :refer :all])
 
 (def +version+ "0.2.1-SNAPSHOT")
+(set! *warn-on-reflection* true)
 (bootlaces! +version+)
 
 (task-options!

@@ -10,39 +10,35 @@
                  :or {id nil parent-id nil}}]
   (OperationGroup. id parent-id operations))
 
-(defn- default-tag-fn []
-  (let [global-id-counter (atom 0)]
-    (fn [_] (swap! global-id-counter inc))))
-
 (defprotocol IHistory
   (operations-since-id [self id])
   (rebase [self new-tip]))
 
-(deftype Document [index operations tag-fn]
+(deftype Document
+    [^clojure.lang.PersistentArrayMap index
+     ^clojure.lang.PersistentVector operations]
   IHistory
   (operations-since-id [self id]
     (subvec operations (inc (get index id))))
   (rebase [self {:keys [parent-id] :as new-tip}]
     (if (seq operations)
       (if (contains? index parent-id)
-        (if (seq (operations-since-id self parent-id))
-          (->> (operations-since-id self parent-id)
-               (reduce composers/compose)
+        (if-let [s (seq (operations-since-id self parent-id))]
+          (->> (reduce composers/compose s)
                (transforms/transform (:operations new-tip))
                (first)
                (assoc new-tip :operations))
           new-tip)
-        (println "Rejected operation. No common ancestor found."))
+        (throw (Exception. "Rejected operation. No common ancestor found.")))
       new-tip))
   clojure.lang.IPersistentCollection
   (seq [self] (seq operations))
   (cons [self x]
-    (let [rebased (update (rebase self x) :id tag-fn)]
+    (let [rebased (rebase self x)]
       (Document.
-       (assoc (.index self) (:id rebased) (count operations))
-       (conj (.operations self) (:operations rebased))
-       tag-fn)))
-  (empty [self] (Document. {} [] tag-fn))
+       (assoc index (:id rebased) (count operations))
+       (conj operations (:operations rebased)))))
+  (empty [self] (Document. {} []))
   (equiv [self o]
     (if (instance? Document o)
       (and (= index (.index o))
@@ -50,15 +46,16 @@
       false)))
 
 (defn as-string [^Document document]
-  (when-let [s (seq document)]
-    (documents/apply-ops "" (reduce composers/compose s))))
+  (some->> (seq document)
+           (reduce composers/compose)
+           (documents/apply-ops "")))
 
-(defn build-document []
-  (Document. {} [] (default-tag-fn)))
+(defn document []
+  (Document. {} []))
 
 ;; -----------
 
 (comment
- (let [document (atom (build-document))]
+ (let [document (atom (document))]
    (swap! document conj operations)
    (as-text document)))
