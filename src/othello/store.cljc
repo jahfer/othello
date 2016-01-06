@@ -3,59 +3,77 @@
             [othello.transforms :as transforms]
             [othello.documents  :as documents]))
 
-(defrecord OperationGroup [id parent-id operations])
+(defrecord Operation [id parent-id operations])
 
-(defn operation-group
+(defn operation
   [operations & {:keys [id parent-id]
                  :or {id nil parent-id nil}}]
-  (OperationGroup. id parent-id operations))
+  (Operation. id parent-id operations))
 
-(defprotocol IHistory
-  (operations-since-id [self id])
+(defprotocol OTCollection
+  (get-operation [self id] [self id not-found])
+  (take-since [self id])
   (rebase [self new-tip]))
 
-(deftype Document
-    [^clojure.lang.PersistentArrayMap index
-     ^clojure.lang.PersistentVector operations]
-  IHistory
-  (operations-since-id [self id]
-    (subvec operations (inc (get index id))))
+(declare otl-conj)
+
+#?(:clj (deftype OperationalTransformList
+            [^clojure.lang.PersistentArrayMap index
+             ^clojure.lang.PersistentVector operations]
+          clojure.lang.IPersistentCollection
+          (seq [self] (seq operations))
+          (cons [self x] (otl-conj self x))
+          (empty [self] (OperationalTransformList. {} [])))
+   :cljs (deftype OperationalTransformList [index operations]
+           ISeqable
+           (-seq [self] (seq operations))
+           ICollection
+           (-conj [self x] (otl-conj self x))
+           IEmptyableCollection
+           (-empty [self] (OperationalTransformList. {} []))))
+
+(defn- otl-conj [^OperationalTransformList coll x]
+  (let [rebased (rebase coll x)]
+    (OperationalTransformList.
+     (assoc (.-index coll) (:id rebased) (count (.-operations coll)))
+     (conj (.-operations coll) (:operations rebased)))))
+
+(extend-type OperationalTransformList
+  OTCollection
+  (get-operation ([self id]
+                  (some->> id
+                           (get (.-index self))
+                           (get (.-operations self))))
+    ([self id not-found]
+     (or (get-operation self id) not-found)))
+  (take-since [self id]
+    (subvec (.-operations self) (inc (get (.-index self) id))))
   (rebase [self {:keys [parent-id] :as new-tip}]
-    (if (seq operations)
-      (if (contains? index parent-id)
-        (if-let [s (seq (operations-since-id self parent-id))]
+    (if (seq (.-operations self))
+      (if (contains? (.-index self) parent-id)
+        (if-let [s (seq (take-since self parent-id))]
           (->> (reduce composers/compose s)
                (transforms/transform (:operations new-tip))
                (first)
                (assoc new-tip :operations))
           new-tip)
-        (throw (Exception. "Rejected operation. No common ancestor found.")))
-      new-tip))
-  clojure.lang.IPersistentCollection
-  (seq [self] (seq operations))
-  (cons [self x]
-    (let [rebased (rebase self x)]
-      (Document.
-       (assoc index (:id rebased) (count operations))
-       (conj operations (:operations rebased)))))
-  (empty [self] (Document. {} []))
-  (equiv [self o]
-    (if (instance? Document o)
-      (and (= index (.index o))
-           (= operations (.operations o)))
-      false)))
+        #?(:clj (throw (Exception. "Rejected operation. No common ancestor found."))
+           :cljs (println "Rejected operation. No common ancestor found.")))
+      new-tip)))
 
-(defn as-string [^Document document]
+(defn as-string [^OperationalTransformList document]
   (some->> (seq document)
            (reduce composers/compose)
            (documents/apply-ops "")))
 
-(defn document []
-  (Document. {} []))
+(defn operation-list []
+  (empty (->OperationalTransformList nil nil)))
 
 ;; -----------
 
 (comment
- (let [document (atom (document))]
-   (swap! document conj operations)
-   (as-text document)))
+  (-> (document) (conj op1) (conj op3) (conj op2) (as-text))
+
+  (let [document (atom (document))]
+    (swap! document conj operations)
+    (as-text document)))
