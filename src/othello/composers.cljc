@@ -45,6 +45,3 @@
       (let [[ops1 ops2 composed] (compose-ops ops1 ops2 composed)]
         (recur ops1 ops2 composed))
       composed)))
-
-#?(:cljs (defn composeJS [a b]
-         (o/asJS (compose a b))))

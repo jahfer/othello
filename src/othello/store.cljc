@@ -11,7 +11,6 @@
   (Operation. id parent-id operations))
 
 (defprotocol OTCollection
-  (get-operation [self id] [self id not-found])
   (take-since [self id])
   (rebase [self new-tip]))
 
@@ -20,11 +19,17 @@
 #?(:clj (deftype OperationalTransformList
             [^clojure.lang.PersistentArrayMap index
              ^clojure.lang.PersistentVector operations]
+          clojure.lang.ILookup
+          (valAt [self id]
+            (some->> id (get (.-index self)) (get (.-operations self))))
           clojure.lang.IPersistentCollection
           (seq [self] (seq operations))
           (cons [self x] (otl-conj self x))
           (empty [self] (OperationalTransformList. {} [])))
    :cljs (deftype OperationalTransformList [index operations]
+           ILookup
+           (-lookup [self id]
+            (some->> id (get (.-index self)) (get (.-operations self))))
            ISeqable
            (-seq [self] (seq operations))
            ICollection
@@ -40,12 +45,6 @@
 
 (extend-type OperationalTransformList
   OTCollection
-  (get-operation ([self id]
-                  (some->> id
-                           (get (.-index self))
-                           (get (.-operations self))))
-    ([self id not-found]
-     (or (get-operation self id) not-found)))
   (take-since [self id]
     (subvec (.-operations self) (inc (get (.-index self) id))))
   (rebase [self {:keys [parent-id] :as new-tip}]
