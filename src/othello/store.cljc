@@ -10,11 +10,7 @@
                  :or {id nil parent-id nil}}]
   (Operation. id parent-id operations))
 
-(defprotocol OTCollection
-  (take-since [self id])
-  (rebase [self new-tip]))
-
-(declare otl-conj)
+(declare conj')
 
 #?(:clj (deftype OperationalTransformList
             [^clojure.lang.PersistentArrayMap index
@@ -24,8 +20,11 @@
             (some->> id (get (.-index self)) (get (.-operations self))))
           clojure.lang.IPersistentCollection
           (seq [self] (seq operations))
-          (cons [self x] (otl-conj self x))
-          (empty [self] (OperationalTransformList. {} [])))
+          (cons [self x] (conj' self x))
+          (empty [self] (OperationalTransformList. {} []))
+          Object
+          (toString [_] (str "OperationalTransformList: " (pr-str index))))
+
    :cljs (deftype OperationalTransformList [index operations]
            ILookup
            (-lookup [self id]
@@ -33,35 +32,36 @@
            ISeqable
            (-seq [self] (seq operations))
            ICollection
-           (-conj [self x] (otl-conj self x))
+           (-conj [self x] (conj' self x))
            IEmptyableCollection
-           (-empty [self] (OperationalTransformList. {} []))))
+           (-empty [self] (OperationalTransformList. {} []))
+           Object 
+           (toString [_] (str "OperationalTransformList: " (pr-str index)))))
 
-(defn- otl-conj [^OperationalTransformList coll x]
+(defn- take-since [^OperationalTransformList coll id]
+  (subvec (.-operations coll) (inc (get (.-index coll) id))))
+
+(defn- rebase [^OperationalTransformList coll {:keys [parent-id] :as new-tip}]
+  (if (seq (.-operations coll))
+    (if (contains? (.-index coll) parent-id)
+      (if-let [s (seq (take-since coll parent-id))]
+        (->> (reduce composers/compose s)
+             (transforms/transform (:operations new-tip))
+             (first)
+             (assoc new-tip :operations))
+        new-tip)
+      #?(:clj (throw (Exception. "Rejected operation. No common ancestor found."))
+         :cljs (println "Rejected operation. No common ancestor found.")))
+    new-tip))
+
+(defn- conj' [^OperationalTransformList coll x]
   (let [rebased (rebase coll x)]
     (OperationalTransformList.
      (assoc (.-index coll) (:id rebased) (count (.-operations coll)))
      (conj (.-operations coll) (:operations rebased)))))
 
-(extend-type OperationalTransformList
-  OTCollection
-  (take-since [self id]
-    (subvec (.-operations self) (inc (get (.-index self) id))))
-  (rebase [self {:keys [parent-id] :as new-tip}]
-    (if (seq (.-operations self))
-      (if (contains? (.-index self) parent-id)
-        (if-let [s (seq (take-since self parent-id))]
-          (->> (reduce composers/compose s)
-               (transforms/transform (:operations new-tip))
-               (first)
-               (assoc new-tip :operations))
-          new-tip)
-        #?(:clj (throw (Exception. "Rejected operation. No common ancestor found."))
-           :cljs (println "Rejected operation. No common ancestor found.")))
-      new-tip)))
-
-(defn as-string [^OperationalTransformList document]
-  (some->> (seq document)
+(defn as-string [^OperationalTransformList coll]
+  (some->> (seq coll)
            (reduce composers/compose)
            (documents/apply-ops "")))
 
@@ -71,7 +71,11 @@
 ;; -----------
 
 (comment
-  (-> (document) (conj op1) (conj op3) (conj op2) (as-text))
+  (-> (operation-list)
+      (conj op1)
+      (conj op3)
+      (conj op2)
+      (as-text))
 
   (let [document (atom (document))]
     (swap! document conj operations)

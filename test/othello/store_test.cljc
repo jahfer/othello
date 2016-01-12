@@ -37,13 +37,13 @@
   ;;     (is (= expected (last (.operations @container))))))
   )
 
-(deftest get-operation
-  (testing "#get-operation will retrieve an operation based on its id"
+(deftest lookup
+  (testing "#get will retrieve an operation based on its id"
     (let [uuid #uuid "C42CEBB6-B74B-11E5-891E-7AFF5FF10656"
           ins-a (defops ::o/ins "a")]
       (is (= ins-a (-> (store/operation-list)
-                           (conj (store/operation ins-a :id uuid))
-                           (get uuid)))))))
+                       (conj (store/operation ins-a :id uuid))
+                       (get uuid)))))))
 
 (deftest as-string
   (testing "#as-string returns the expected text"
