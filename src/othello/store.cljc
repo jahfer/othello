@@ -50,7 +50,8 @@
              (first)
              (assoc new-tip :operations))
         new-tip)
-      #?(:clj (throw (Exception. "Rejected operation. No common ancestor found."))
+      #?(:clj (throw (ex-info "Rejected operation. No common ancestor found."
+                              {:type ::illegal-operation :parent-id parent-id}))
          :cljs (println "Rejected operation. No common ancestor found.")))
     new-tip))
 

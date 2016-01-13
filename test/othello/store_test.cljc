@@ -25,6 +25,20 @@
                       (conj (store/operation (defops ::o/ret 2 ::o/ins "a") :parent-id 2))
                       (store/as-string)))))
 
+  #?(:clj (testing "#conj raises when an operation is not based on a known parent"
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Rejected operation. No common ancestor found."
+                                  (-> (store/operation-list)
+                                      (conj (store/operation (defops ::o/ins "a") :id 1))
+                                      (conj (store/operation (defops ::o/ins "z") :id 2 :parent-id 5)))))))
+
+  #?(:clj (testing "#conj supplies error data when an operation is not based on a known parent"
+            (try (ex-data (-> (store/operation-list)
+                              (conj (store/operation (defops ::o/ins "a") :id 1))
+                              (conj (store/operation (defops ::o/ins "z") :id 2 :parent-id 5))))
+                 (catch clojure.lang.ExceptionInfo e
+                   (is (= {:type ::store/illegal-operation :parent-id 5}
+                          (-> e ex-data (select-keys [:type :parent-id]))))))))
+
   ;; (testing "#conj returns the history object"
   ;;   (let [container (atom (storeoperation-list))
   ;;         root (store/operation (o/oplist ::o/ins "c") :id 1)
