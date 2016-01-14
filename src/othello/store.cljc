@@ -6,8 +6,7 @@
 (defrecord Operation [id parent-id operations])
 
 (defn operation
-  [operations & {:keys [id parent-id]
-                 :or {id nil parent-id nil}}]
+  [operations & {:keys [id parent-id] :or {id nil parent-id nil}}]
   (Operation. id parent-id operations))
 
 (declare conj')
@@ -35,15 +34,19 @@
            (-conj [self x] (conj' self x))
            IEmptyableCollection
            (-empty [self] (OperationalTransformList. {} []))
-           Object 
+           Object
            (toString [_] (str "OperationalTransformList: " (pr-str index)))))
 
 (defn- take-since [^OperationalTransformList coll id]
-  (subvec (.-operations coll) (inc (get (.-index coll) id))))
+  "Returns operations since id (exclusive)"
+  (if (nil? id)
+    (.-operations coll)
+    (when (contains? (.-index coll) id)
+      (subvec (.-operations coll) (inc (get (.-index coll) id))))))
 
 (defn- rebase [^OperationalTransformList coll {:keys [parent-id] :as new-tip}]
   (if (seq (.-operations coll))
-    (if (contains? (.-index coll) parent-id)
+    (if (and (not (nil? parent-id)) (contains? (.-index coll) parent-id))
       (if-let [s (seq (take-since coll parent-id))]
         (->> (reduce composers/compose s)
              (transforms/transform (:operations new-tip))
@@ -61,10 +64,12 @@
      (assoc (.-index coll) (:id rebased) (count (.-operations coll)))
      (conj (.-operations coll) (:operations rebased)))))
 
-(defn as-string [^OperationalTransformList coll]
-  (some->> (seq coll)
+(defn as-string [^OperationalTransformList coll & {:keys [last-id last-output]
+                                                   :or {last-id nil last-output ""}}]
+  (some->> (take-since coll last-id)
+           (seq)
            (reduce composers/compose)
-           (documents/apply-ops "")))
+           (documents/apply-ops last-output)))
 
 (defn operation-list []
   (empty (->OperationalTransformList nil nil)))

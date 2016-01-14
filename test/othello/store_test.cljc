@@ -37,19 +37,7 @@
                               (conj (store/operation (defops ::o/ins "z") :id 2 :parent-id 5))))
                  (catch clojure.lang.ExceptionInfo e
                    (is (= {:type ::store/illegal-operation :parent-id 5}
-                          (-> e ex-data (select-keys [:type :parent-id]))))))))
-
-  ;; (testing "#conj returns the history object"
-  ;;   (let [container (atom (storeoperation-list))
-  ;;         root (store/operation (o/oplist ::o/ins "c") :id 1)
-  ;;         client-a (store/operation (o/oplist ::o/ret 1 ::o/ins "a") :parent-id (:id root))
-  ;;         client-b (store/operation (o/oplist ::o/ret 1 ::o/ins "b") :parent-id (:id root))
-  ;;         expected (store/->OperationGroup 3 1 (o/oplist ::o/ret 1 ::o/ins "b" ::o/ret 1))]
-  ;;     (swap! container conj root)
-  ;;     (swap! container conj client-a)
-  ;;     (swap! container conj client-b)
-  ;;     (is (= expected (last (.operations @container))))))
-  )
+                          (-> e ex-data (select-keys [:type :parent-id])))))))))
 
 (deftest lookup
   (testing "#get will retrieve an operation based on its id"
@@ -73,4 +61,20 @@
       (is (= "12" (store/as-string container)))))
 
   (testing "#as-string returns nil for an empty container"
-    (is (nil? (store/as-string (store/operation-list))))))
+    (is (nil? (store/as-string (store/operation-list)))))
+
+  (testing "#as-string accepts :last-output to apply operations on"
+    (is (= "hello" (-> (store/operation-list)
+                       (conj (store/operation (defops ::o/ret 4 ::o/ins "o")))
+                       (store/as-string :last-output "hell")))))
+
+  (testing "#as-string accepts :last-id and :last-output to only apply operations after an id"
+    (let [container (-> (store/operation-list)
+                        (conj (store/operation (defops ::o/ins "h") :id 1))
+                        (conj (store/operation (defops ::o/ret 1 ::o/ins "e") :parent-id 1 :id 2)))
+          last-output (store/as-string container)
+          ins-y (store/operation (defops ::o/ret 2 ::o/ins "y") :parent-id 2 :id 3)]
+      (is (= "hey" (-> (conj container ins-y)
+                       (store/as-string :last-id 2 :last-output last-output))))
+      (is (= "day" (-> (conj container ins-y)
+                       (store/as-string :last-id 2 :last-output "da")))))))
