@@ -12,23 +12,8 @@
 (defn oplist [& operations]
   (mapv #(apply ->Op %) (partition 2 operations)))
 
-#?(:cljs (defn ^:export oplistJS [arr]
-         (let [coll (js->clj arr :keywordize-keys true)
-               ops (flatten (map (fn [op]
-                               (cond
-                                 (contains? op :retain) [::ret (:retain op)]
-                                 (contains? op :insert) [::ins (:insert op)]
-                                 (contains? op :delete) [::del (:delete op)]))
-                             coll))]
-           (apply oplist ops))))
-
-#?(:cljs (defn ^:export asJS [coll]
-         (clj->js (map (fn [op]
-                         (let [key (condp = (:type op)
-                                     ::ret "retain"
-                                     ::ins "insert"
-                                     ::del "delete")]
-                           {key (:val op)})) coll))))
+(defmacro defops [& operations]
+  (mapv #(apply ->Op %) (partition 2 operations)))
 
 (defn print-ops [operations]
   (pr-str (mapcat #(list (:type %) (:val %)) operations)))

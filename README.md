@@ -4,7 +4,46 @@
 
 A clojure/clojurescript library to handle composition and transformation of operations, using [Operational Transform](https://en.wikipedia.org/wiki/Operational_transformation) (OT).
 
-## Usage
+## Basic Usage
+
+Othello provides a collection object that handles the complexities of making operations eventually consistent. 
+
+```clj
+(ns example.one
+  (:require [othello.store :as store]
+            [othello.operations :as op :refer (defops)]))
+
+;;          "g"
+;;           |
+;;          "o"
+;;          / \
+;;        "a" "t"
+
+(def container 
+  (-> (store/operation-list)
+      (conj (store/operation (defops ::op/ins "g")            :id 1))
+      (conj (store/operation (defops ::op/ret 1 ::op/ins "o") :id 2 :parent-id 1))
+      (conj (store/operation (defops ::op/ret 2 ::op/ins "t") :id 3 :parent-id 2))
+      (conj (store/operation (defops ::op/ret 2 ::op/ins "a") :id 4 :parent-id 2))))
+
+(store/as-string container)
+;; => "goat"
+```
+
+The only externally-managed requirement is the assignment of IDs to operations. This is used as an index into the internally-managed state, but has no requirements other than being a unique key (a UUID would work well).
+
+If you need to retrieve the transformed operation after it has been reconciled against the rest of the history, (e.g. the 4th operation in the example above), you can retrieve objects by their ID from the store. 
+
+```clj
+(get container 4)
+;; => [#othello.operations.Op{:type :othello.operations/ret, :val 2} 
+;;     #othello.operations.Op{:type :othello.operations/ins, :val "a"} 
+;;     #othello.operations.Op{:type :othello.operations/ret, :val 1}]
+```
+
+_Note how the result accounts for the 't' that occurred after the 'a' but was inserted prior, by adding a retain at the end._
+
+## Advanced Usage
 
 Below is a simplified diagram of when the use of `compose` and `transform` functions. 
 
@@ -28,7 +67,7 @@ When the client receives this acknowledgement, it flushes the buffer and sends a
 
 For a detailed explanation, [Understanding and Applying Operational Transform](http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation) is an indespensible resource.
 
-### Basic
+### Primitives
 
 There are three primitive types defined in this library: "retain", "insert", and "delete". In the code they are referenced as namespaced symbols (e.g. `:othello.operations/ret` for "retain"). It's possible to expand beyond these basic building blocks, but that is experimental for now.
 
