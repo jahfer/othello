@@ -14,7 +14,7 @@
          '[adzerk.boot-test :refer [test]]
          '[adzerk.bootlaces :refer :all])
 
-(def +version+ "0.2.1-SNAPSHOT")
+(def +version+ "0.3.0-SNAPSHOT")
 (set! *warn-on-reflection* true)
 (bootlaces! +version+)
 
