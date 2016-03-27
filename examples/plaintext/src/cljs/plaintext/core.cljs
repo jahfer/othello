@@ -4,22 +4,29 @@
             [othello.store :as store]
             [othello.operations :as operations]
             [othello.documents :as document]
-            [othello.composers :as composers])
-  (:require-macros [othello.operations :refer (defops)]))
+            [othello.composers :as composers]
+            [cljs.core.async :refer [put! chan]]
+            [taoensso.sente :as sente :refer (cb-success?)])
+  (:require-macros [othello.operations :refer (defops)]
+                   [cljs.core.async.macros :as asyncm :refer (go go-loop)]))
 
-;; Set initial state of app
-(defonce app-state (atom {:text "Hello Chestnut!"
-                          :local-document  {:buffer [] :text nil :pending? false}
-                          :remote-document {:last-id nil}}))
+;; ========= Set initial state of app =========
 
-;; Native JS
-(defn $editor []
-  (.getElementById js/document "editor"))
+(defonce app-state (atom {:text "Operational Transform Editor"
+                          :local-document  {:text nil}
+                          :sync {:last-seen-id nil
+                                 :buffer []
+                                 :pending-operation []}}))
+
+
+;; ========= Native JS =========
+
+(defn $editor [] (.getElementById js/document "editor"))
 
 (defn caret-position
   "gets or sets the current cursor position"
   ([]
-   (js/parseInt (.-selectionStart (.getElementById js/document "editor")) 10))
+   (js/parseInt (.-selectionStart ($editor)) 10))
   ([new-pos]
    (let [el (aget (.-childNodes ($editor)) 0)
          range (.createRange js/document)
@@ -30,24 +37,56 @@
        (.removeAllRanges sel)
        (.addRange sel range)))))
 
-;; Document processing
-(defn set-pending! [state]
-  (swap! app-state assoc-in [:local-document :pending?] state))
+;; ======== Set up the socket ========
 
-(defn buf-append [operation]
-  (swap! app-state update-in [:local-document :buffer] conj operation))
+(let [{:keys [chsk ch-recv send-fn state]}
+      (sente/make-channel-socket! "/chsk" {:type :ws})]
+  (def chsk       chsk)
+  (def ch-chsk    ch-recv) ; ChannelSocket's receive channel
+  (def chsk-send! send-fn) ; ChannelSocket's send API fn
+  (def chsk-state state)   ; Watchable, read-only atom
+  )
+
+
+;; ========= Document processing =========
+
+(def compose-operations (partial reduce composers/compose))
+
+(defn pending? []
+  (boolean (seq (get-in @app-state [:sync :pending-operation]))))
+
+(declare push!)
+
+(defn flush-buffer! []
+  (println "flushing buffer")
+  (let [buffer (get-in @app-state [:sync :buffer])]
+    (swap! app-state assoc-in [:sync :pending-operation] [])
+    (swap! app-state assoc-in [:sync :buffer] [])
+    (when (seq buffer)
+      (push! (compose-operations buffer)))))
+
+(defn sync-done [reply]
+  (when (cb-success? reply)
+    (swap! app-state assoc-in [:sync :last-seen-id] (:id reply))
+    (flush-buffer!)))
+
+(defn push! [opdata]
+  (swap! app-state assoc-in [:sync :pending-operation] opdata)
+  (let [last-seen-id (get-in @app-state [:sync :last-seen-id])
+        package {:operations opdata :parent-id last-seen-id}]
+    (chsk-send! [:document/some-id package] 8000 sync-done)))
+
+(defn append-to-buf! [operation]
+  (swap! app-state update-in [:sync :buffer] conj operation))
 
 (defn apply! [operation]
   (swap! app-state update-in [:local-document :text] document/apply-ops operation))
 
-(defn flush-buffer! []
-  (set-pending! false)
-  (reduce composers/compose (get-in @app-state [:local-document :buffer])))
-
 (defn insert! [operation & {:keys [local?] :or {local? false}}]
-  (if (get-in @app-state [:local-document :pending?])
-    (buf-append operation)
-    (set-pending! true))
+  "Takes a vector of Operations to apply locally"
+  (if (pending?)
+    (append-to-buf! operation)
+    (push! operation))
   (apply! operation))
 
 (defn insert-operation [char position]
@@ -58,7 +97,9 @@
       true             (into (defops ::operations/ins char))
       (pos? remaining) (into (defops ::operations/ret remaining)))))
 
-;; Build out UI
+
+;; ========= Build out UI =========
+
 (defn key-handler [event]
   (.preventDefault event)
   (when-not (some #(= (.-keyCode event) %) [8 37 38 39 40])
@@ -68,19 +109,29 @@
 (defn greeting []
   [:div
    [:h1 (:text @app-state)]
-   [:p (str "Buffering? " (get-in @app-state [:local-document :pending?]))]
+   [:p (str "Last seen parent: " (get-in @app-state [:sync :last-seen-id]))]
    [:textarea {:id "editor"
                :on-key-press #(key-handler %)
-               :value (get-in @app-state [:local-document :text])}]])
+               :value (get-in @app-state [:local-document :text])}]
+   (when (pending?)
+     [:div
+      [:h2 "Syncing"]
+      [:ul [:li (pr-str (get-in @app-state [:sync :pending-operation]))]]
+      [:h2 "Buffer"]
+      (if (seq (get-in @app-state [:sync :buffer]))
+        [:ul (for [operation (get-in @app-state [:sync :buffer])]
+               [:li (pr-str operation)])]
+        [:ul [:li "Buffer is empty"]])])])
 
 
-;; Set up some initialization
+;; ========= Set up some initialization =========
+
 (defn fetch-remote-document []
   (GET "/document.json"
       :response-format :json
       :keywords? true
       :handler (fn [{:keys [initial-text last-id]}]
-                 (swap! app-state assoc-in [:remote-document :last-id] last-id)
+                 (swap! app-state assoc-in [:sync :last-seen-id] last-id)
                  (swap! app-state assoc-in [:local-document :text] initial-text))))
 
 (defn run []
@@ -90,5 +141,7 @@
   (fetch-remote-document)
   (run))
 
-;; Kick things off
+
+;; ========= Kick things off =========
+
 (init)

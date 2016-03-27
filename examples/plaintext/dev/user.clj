@@ -1,5 +1,5 @@
 (ns user
-  (:require [plaintext.server]
+  (:require [plaintext.server :as server]
             [ring.middleware.reload :refer [wrap-reload]]
             [figwheel-sidecar.repl-api :as figwheel]))
 
@@ -11,7 +11,12 @@
 (def http-handler
   (wrap-reload #'plaintext.server/http-handler))
 
-(defn run []
-  (figwheel/start-figwheel!))
+(defn start []
+  (figwheel/start-figwheel!)
+  (server/start! http-handler))
+
+(defn stop []
+  (figwheel/stop-figwheel!)
+  (server/stop!))
 
 (def browser-repl figwheel/cljs-repl)
