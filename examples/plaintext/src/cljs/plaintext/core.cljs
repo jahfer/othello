@@ -5,19 +5,19 @@
             [othello.operations :as operations]
             [othello.documents :as document]
             [othello.composers :as composers]
-            [cljs.core.async :refer [put! chan]]
+            [cljs.core.async :refer [put! chan <!]]
             [taoensso.sente :as sente :refer (cb-success?)])
   (:require-macros [othello.operations :refer (defops)]
                    [cljs.core.async.macros :as asyncm :refer (go go-loop)]))
 
 ;; ========= Set initial state of app =========
 
-(defonce app-state (atom {:text "Operational Transform Editor"
-                          :local-document  {:text nil}
-                          :sync {:last-seen-id nil
-                                 :buffer []
-                                 :pending-operation []}}))
-
+(defonce app-state
+  (atom {:text "Operational Transform Editor"
+         :local-document  {:text nil}
+         :sync {:last-seen-id nil
+                :buffer []
+                :pending-operation []}}))
 
 ;; ========= Native JS =========
 
@@ -74,7 +74,7 @@
   (swap! app-state assoc-in [:sync :pending-operation] opdata)
   (let [last-seen-id (get-in @app-state [:sync :last-seen-id])
         package {:operations opdata :parent-id last-seen-id}]
-    (chsk-send! [:document/some-id package] 8000 sync-done)))
+    (chsk-send! [:document/some-id package] 8000)))
 
 (defn append-to-buf! [operation]
   (swap! app-state update-in [:sync :buffer] conj operation))
@@ -97,6 +97,11 @@
       true             (into (defops ::operations/ins char))
       (pos? remaining) (into (defops ::operations/ret remaining)))))
 
+(defn recv-queue []
+  (go-loop []
+    (let [{:as ev-msg [_ data] :event} (<! ch-chsk)]
+      (println data)
+      (recur))))
 
 ;; ========= Build out UI =========
 
@@ -139,6 +144,7 @@
 
 (defn init []
   (fetch-remote-document)
+  (recv-queue)
   (run))
 
 

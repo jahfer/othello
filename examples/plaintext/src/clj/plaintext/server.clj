@@ -16,22 +16,37 @@
             [othello.operations :as op :refer (defops)])
   (:gen-class))
 
-(def counter (atom 0))
-(defn next-id [] (swap! counter inc'))
+(defn uuid []
+  (str (java.util.UUID/randomUUID)))
 
-(defn initial-operations []
-  (-> (store/operation-list)
-      (conj (store/operation (defops ::op/ins "!") :id (next-id)))))
+(defn init-state []
+  (let [start-id (uuid)
+        initial-operations (-> (store/operation-list)
+                               (conj (store/operation (defops ::op/ins "!") :id start-id)))]
+    {:last-id start-id
+     :operations initial-operations}))
 
-(defonce document-state
-  (atom {:last-id 1 :operations (initial-operations)}))
+(defonce document-state (atom (init-state)))
+(defn reset-state! [] (reset! document-state (init-state)))
+
+(defn insert! [{:keys [operations parent-id]}]
+  (let [unique-id (uuid)]
+    (as-> operations $
+        (store/operation $ :parent-id parent-id :id unique-id)
+        (swap! document-state #(-> %
+                                   (update :operations conj $)
+                                   (assoc :last-id unique-id)))
+        {:operations (get (:operations $) unique-id)
+         :parent-id parent-id
+         :id unique-id})))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn connected-uids]}
       (sente/make-channel-socket! sente-web-server-adapter {})]
   (def ring-ajax-post                ajax-post-fn)
   (def ring-ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn)
   (def ch-chsk                       ch-recv)
-  (def chsk-send!                    send-fn))
+  (def chsk-send!                    send-fn)
+  (def connected-uids                connected-uids))
 
 (defroutes routes
   (GET  "/chsk" req (ring-ajax-get-or-ws-handshake req))
@@ -46,10 +61,15 @@
      :body (io/input-stream (io/resource "public/index.html"))})
   (resources "/"))
 
-(defn event-msg-handler
-  [{:as ev-msg :keys [id ?data ?reply-fn send-fn]}]
-  (when ?reply-fn
-    (?reply-fn {:id (next-id)})))
+(defn broadcast! [event data]
+  (log/info "BROADCASTING")
+  (doseq [uid (:any @connected-uids)]
+    (log/info "broadcast!" uid event data)
+    (chsk-send! uid [event data])))
+
+(defn event-msg-handler [{:as ev-msg :keys [id ?data]}]
+  (log/info "received data" ev-msg)
+  (broadcast! :editor/operation (insert! ?data)))
 
 (def http-handler
   (-> routes

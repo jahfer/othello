@@ -19,4 +19,7 @@
   (figwheel/stop-figwheel!)
   (server/stop!))
 
+(defn reset []
+  (server/reset-state!))
+
 (def browser-repl figwheel/cljs-repl)
