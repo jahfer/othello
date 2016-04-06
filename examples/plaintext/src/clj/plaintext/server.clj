@@ -13,14 +13,19 @@
             [taoensso.sente :as sente]
             [taoensso.sente.server-adapters.http-kit :refer (sente-web-server-adapter)]
             [othello.store :as store]
-            [othello.operations :as op :refer (defops)])
+            [othello.operations :as op :refer (defops)]
+            [clojure.pprint :as pprint])
   (:gen-class))
 
-(defn uuid []
-  (str (java.util.UUID/randomUUID)))
+(defn pformat [& args]
+  (with-out-str
+    (apply pprint/pprint args)))
+
+(defn make-uuid []
+  (java.util.UUID/randomUUID))
 
 (defn init-state []
-  (let [start-id (uuid)
+  (let [start-id (make-uuid)
         initial-operations (-> (store/operation-list)
                                (conj (store/operation (defops ::op/ins "!") :id start-id)))]
     {:last-id start-id
@@ -29,8 +34,8 @@
 (defonce document-state (atom (init-state)))
 (defn reset-state! [] (reset! document-state (init-state)))
 
-(defn insert! [{:keys [operations parent-id]}]
-  (let [unique-id (uuid)]
+(defn insert! [{:keys [operations parent-id client-id]}]
+  (let [unique-id (make-uuid)]
     (as-> operations $
         (store/operation $ :parent-id parent-id :id unique-id)
         (swap! document-state #(-> %
@@ -38,7 +43,8 @@
                                    (assoc :last-id unique-id)))
         {:operations (get (:operations $) unique-id)
          :parent-id parent-id
-         :id unique-id})))
+         :id unique-id
+         :client-id client-id})))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn connected-uids]}
       (sente/make-channel-socket! sente-web-server-adapter {})]
@@ -68,8 +74,9 @@
     (chsk-send! uid [event data])))
 
 (defn event-msg-handler [{:as ev-msg :keys [id ?data]}]
-  (log/info "received data" ev-msg)
-  (broadcast! :editor/operation (insert! ?data)))
+  (log/info "WS RECV" ev-msg)
+  (when (= id :document/some-id)
+   (broadcast! :editor/operation (insert! ?data))))
 
 (def http-handler
   (-> routes

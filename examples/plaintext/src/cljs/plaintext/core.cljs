@@ -6,7 +6,8 @@
             [othello.documents :as document]
             [othello.composers :as composers]
             [cljs.core.async :refer [put! chan <!]]
-            [taoensso.sente :as sente :refer (cb-success?)])
+            [taoensso.sente :as sente :refer (cb-success?)]
+            [goog.string.StringBuffer])
   (:require-macros [othello.operations :refer (defops)]
                    [cljs.core.async.macros :as asyncm :refer (go go-loop)]))
 
@@ -37,6 +38,17 @@
        (.removeAllRanges sel)
        (.addRange sel range)))))
 
+;; https://github.com/davesann/cljs-uuid/blob/master/src/cljs_uuid/core.cljs
+(defn make-uuid
+  []
+  (letfn [(f [] (.toString (rand-int 16) 16))
+          (g [] (.toString  (bit-or 0x8 (bit-and 0x3 (rand-int 15))) 16))]
+    (uuid (.toString
+            (goog.string.StringBuffer.
+             (f) (f) (f) (f) (f) (f) (f) (f) "-" (f) (f) (f) (f) 
+             "-4" (f) (f) (f) "-" (g) (f) (f) (f) "-"
+             (f) (f) (f) (f) (f) (f) (f) (f) (f) (f) (f) (f))))))
+
 ;; ======== Set up the socket ========
 
 (let [{:keys [chsk ch-recv send-fn state]}
@@ -65,16 +77,16 @@
     (when (seq buffer)
       (push! (compose-operations buffer)))))
 
-(defn sync-done [reply]
-  (when (cb-success? reply)
-    (swap! app-state assoc-in [:sync :last-seen-id] (:id reply))
-    (flush-buffer!)))
+(defn ack! [id]
+  (swap! app-state assoc-in [:sync :last-seen-id] id)
+  (flush-buffer!))
 
 (defn push! [opdata]
-  (swap! app-state assoc-in [:sync :pending-operation] opdata)
-  (let [last-seen-id (get-in @app-state [:sync :last-seen-id])
-        package {:operations opdata :parent-id last-seen-id}]
-    (chsk-send! [:document/some-id package] 8000)))
+  (let [client-id (make-uuid)]
+    (swap! app-state assoc-in [:sync :pending-operation] {:client-id client-id :operation opdata})
+    (let [last-seen-id (get-in @app-state [:sync :last-seen-id])
+          package {:operations opdata :parent-id last-seen-id :client-id client-id}]
+      (chsk-send! [:document/some-id package] 8000))))
 
 (defn append-to-buf! [operation]
   (swap! app-state update-in [:sync :buffer] conj operation))
@@ -82,8 +94,11 @@
 (defn apply! [operation]
   (swap! app-state update-in [:local-document :text] document/apply-ops operation))
 
-(defn insert! [operation & {:keys [local?] :or {local? false}}]
+(defn insert! [operation & {:keys [id]}]
   "Takes a vector of Operations to apply locally"
+  ;; need to fix for local change when buffering
+  (when id
+    (swap! app-state assoc-in [:sync :last-seen-id] id))
   (if (pending?)
     (append-to-buf! operation)
     (push! operation))
@@ -99,8 +114,15 @@
 
 (defn recv-queue []
   (go-loop []
-    (let [{:as ev-msg [_ data] :event} (<! ch-chsk)]
-      (println data)
+    (let [{:as ev-msg [_ event] :event} (<! ch-chsk)
+          handle (first event)]
+      (when (= handle :editor/operation)
+        (let [{:keys [id client-id operations]} (second event)
+              pending-operation (get-in @app-state [:sync :pending-operation :client-id])]
+          (if (and (not (nil? pending-operation))
+                   (= client-id pending-operation))
+            (ack! id)
+            (insert! operations {:id id}))))
       (recur))))
 
 ;; ========= Build out UI =========
@@ -136,7 +158,7 @@
       :response-format :json
       :keywords? true
       :handler (fn [{:keys [initial-text last-id]}]
-                 (swap! app-state assoc-in [:sync :last-seen-id] last-id)
+                 (swap! app-state assoc-in [:sync :last-seen-id] (uuid (.toString last-id)))
                  (swap! app-state assoc-in [:local-document :text] initial-text))))
 
 (defn run []
