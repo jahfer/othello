@@ -32,7 +32,9 @@
      :operations initial-operations}))
 
 (defonce document-state (atom (init-state)))
-(defn reset-state! [] (reset! document-state (init-state)))
+(defn reset-state! []
+  (reset! document-state (init-state))
+  (broadcast! :browser/refresh true))
 
 (defn insert! [{:keys [operations parent-id client-id]}]
   (let [unique-id (make-uuid)]
@@ -76,7 +78,8 @@
 (defn event-msg-handler [{:as ev-msg :keys [id ?data]}]
   (log/info "WS RECV" ev-msg)
   (when (= id :document/some-id)
-   (broadcast! :editor/operation (insert! ?data))))
+    (let [inserted (insert! ?data)]
+      (broadcast! :editor/operation inserted))))
 
 (def http-handler
   (-> routes

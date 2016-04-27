@@ -67,21 +67,20 @@
 (defn pending? []
   (boolean (seq (get-in @app-state [:sync :pending-operation]))))
 
-(declare push!)
+(declare sync!)
 
 (defn flush-buffer! []
-  (println "flushing buffer")
   (let [buffer (get-in @app-state [:sync :buffer])]
     (swap! app-state assoc-in [:sync :pending-operation] [])
     (swap! app-state assoc-in [:sync :buffer] [])
     (when (seq buffer)
-      (push! (compose-operations buffer)))))
+      (sync! (compose-operations buffer)))))
 
 (defn ack! [id]
   (swap! app-state assoc-in [:sync :last-seen-id] id)
   (flush-buffer!))
 
-(defn push! [opdata]
+(defn sync! [opdata]
   (let [client-id (make-uuid)]
     (swap! app-state assoc-in [:sync :pending-operation] {:client-id client-id :operation opdata})
     (let [last-seen-id (get-in @app-state [:sync :last-seen-id])
@@ -94,17 +93,14 @@
 (defn apply! [operation]
   (swap! app-state update-in [:local-document :text] document/apply-ops operation))
 
-(defn insert! [operation & {:keys [id]}]
+(defn insert! [operation]
   "Takes a vector of Operations to apply locally"
-  ;; need to fix for local change when buffering
-  (when id
-    (swap! app-state assoc-in [:sync :last-seen-id] id))
   (if (pending?)
     (append-to-buf! operation)
-    (push! operation))
+    (sync! operation))
   (apply! operation))
 
-(defn insert-operation [char position]
+(defn make-insert [char position]
   (let [current-text (get-in @app-state [:local-document :text])
         remaining (- (count current-text) position)]
     (cond-> []
@@ -112,33 +108,40 @@
       true             (into (defops ::operations/ins char))
       (pos? remaining) (into (defops ::operations/ret remaining)))))
 
-(defn recv-queue []
-  (go-loop []
-    (let [{:as ev-msg [_ event] :event} (<! ch-chsk)
-          handle (first event)]
-      (when (= handle :editor/operation)
-        (let [{:keys [id client-id operations]} (second event)
-              pending-operation (get-in @app-state [:sync :pending-operation :client-id])]
-          (if (and (not (nil? pending-operation))
-                   (= client-id pending-operation))
-            (ack! id)
-            (insert! operations {:id id}))))
-      (recur))))
+(defn make-delete [position]
+  (let [current-text (get-in @app-state [:local-document :text])
+        remaining (- (count current-text) position)
+        ops (defops ::operations/ret (dec position) ::operations/del 1)]
+    (if (pos? remaining)
+      (into ops (defops ::operations/ret remaining))
+      ops)))
+
+(defn receive [{:keys [id client-id operations]}]
+  (let [pending-operation (get-in @app-state [:sync :pending-operation :client-id])]
+    (if (and (not (nil? pending-operation)) (= client-id pending-operation))
+      (ack! id)
+      (do (apply! operations)
+          (when (not (pending?)) ;; need to fix for local change when buffering
+            (swap! app-state assoc-in [:sync :last-seen-id] id))))))
 
 ;; ========= Build out UI =========
 
-(defn key-handler [event]
-  (.preventDefault event)
+(defn keypress-handler [event]
   (when-not (some #(= (.-keyCode event) %) [8 37 38 39 40])
     (let [char (.fromCharCode js/String (.-which event))]
-      (insert! (insert-operation char (caret-position))))))
+      (insert! (make-insert char (caret-position))))))
+
+(defn keydown-handler [event]
+  (when (= (.-which event) 8)
+    (insert! (make-delete (caret-position)))))
 
 (defn greeting []
   [:div
    [:h1 (:text @app-state)]
    [:p (str "Last seen parent: " (get-in @app-state [:sync :last-seen-id]))]
    [:textarea {:id "editor"
-               :on-key-press #(key-handler %)
+               :on-key-down #(keydown-handler %)
+               :on-key-press #(keypress-handler %)
                :value (get-in @app-state [:local-document :text])}]
    (when (pending?)
      [:div
@@ -160,6 +163,16 @@
       :handler (fn [{:keys [initial-text last-id]}]
                  (swap! app-state assoc-in [:sync :last-seen-id] (uuid (.toString last-id)))
                  (swap! app-state assoc-in [:local-document :text] initial-text))))
+
+(defn recv-queue []
+  (go-loop []
+    (let [{:as ev-msg [_ event] :event} (<! ch-chsk)
+          handle (first event)]
+      (case handle
+        :editor/operation (receive (second event))
+        :browser/refresh  (.reload js/location)
+        (println "unhandled event" event))
+      (recur))))
 
 (defn run []
   (reagent/render [greeting] (js/document.getElementById "app")))
