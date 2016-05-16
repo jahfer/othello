@@ -32,9 +32,6 @@
      :operations initial-operations}))
 
 (defonce document-state (atom (init-state)))
-(defn reset-state! []
-  (reset! document-state (init-state))
-  (broadcast! :browser/refresh true))
 
 (defn insert! [{:keys [operations parent-id client-id]}]
   (let [unique-id (make-uuid)]
@@ -103,6 +100,10 @@
 (defn stop! []
   (let [server (get @system :server)]
     (server)))
+
+(defn reset-state! []
+  (reset! document-state (init-state))
+  (broadcast! :browser/refresh true))
 
 (defn -main [& [port]]
   (start! http-handler port))

@@ -29,14 +29,7 @@
   ([]
    (js/parseInt (.-selectionStart ($editor)) 10))
   ([new-pos]
-   (let [el (aget (.-childNodes ($editor)) 0)
-         range (.createRange js/document)
-         sel (.getSelection js/document)]
-     (when el
-       (.setStart range el new-pos)
-       (.collapse range true)
-       (.removeAllRanges sel)
-       (.addRange sel range)))))
+   (.setSelectionRange ($editor) new-pos new-pos)))
 
 ;; https://github.com/davesann/cljs-uuid/blob/master/src/cljs_uuid/core.cljs
 (defn make-uuid
@@ -45,7 +38,7 @@
           (g [] (.toString  (bit-or 0x8 (bit-and 0x3 (rand-int 15))) 16))]
     (uuid (.toString
             (goog.string.StringBuffer.
-             (f) (f) (f) (f) (f) (f) (f) (f) "-" (f) (f) (f) (f) 
+             (f) (f) (f) (f) (f) (f) (f) (f) "-" (f) (f) (f) (f)
              "-4" (f) (f) (f) "-" (g) (f) (f) (f) "-"
              (f) (f) (f) (f) (f) (f) (f) (f) (f) (f) (f) (f))))))
 
@@ -128,30 +121,46 @@
 
 (defn keypress-handler [event]
   (when-not (some #(= (.-keyCode event) %) [8 37 38 39 40])
-    (let [char (.fromCharCode js/String (.-which event))]
-      (insert! (make-insert char (caret-position))))))
+    (let [char (.fromCharCode js/String (.-which event))
+          cursor (caret-position)]
+      (swap! app-state assoc-in [:local-document :cursor] (inc cursor))
+      (insert! (make-insert char cursor)))))
 
 (defn keydown-handler [event]
   (when (= (.-which event) 8)
-    (insert! (make-delete (caret-position)))))
+    (let [cursor (caret-position)]
+      (swap! app-state assoc-in [:local-document :cursor] (dec cursor))
+      (insert! (make-delete cursor)))))
+
+(defn editor-input []
+  (reagent/create-class
+   {:component-did-update
+    (fn [] (let [cursor (get-in @app-state [:local-document :cursor])]
+            (caret-position cursor)))
+    :reagent-render
+    (fn []
+      [:textarea {:id "editor"
+                  :on-click #(swap! app-state assoc-in [:local-document :cursor] (caret-position))
+                  :on-key-down #(keydown-handler %)
+                  :on-key-press #(keypress-handler %)
+                  :value (get-in @app-state [:local-document :text])}])}))
+
+(defn buffer-log []
+  [:div
+   [:h2 "Syncing"]
+   [:ul [:li (pr-str (get-in @app-state [:sync :pending-operation]))]]
+   [:h2 "Buffer"]
+   (if (seq (get-in @app-state [:sync :buffer]))
+     [:ul (for [operation (get-in @app-state [:sync :buffer])]
+            [:li (pr-str operation)])]
+     [:ul [:li "Buffer is empty"]])])
 
 (defn greeting []
   [:div
    [:h1 (:text @app-state)]
    [:p (str "Last seen parent: " (get-in @app-state [:sync :last-seen-id]))]
-   [:textarea {:id "editor"
-               :on-key-down #(keydown-handler %)
-               :on-key-press #(keypress-handler %)
-               :value (get-in @app-state [:local-document :text])}]
-   (when (pending?)
-     [:div
-      [:h2 "Syncing"]
-      [:ul [:li (pr-str (get-in @app-state [:sync :pending-operation]))]]
-      [:h2 "Buffer"]
-      (if (seq (get-in @app-state [:sync :buffer]))
-        [:ul (for [operation (get-in @app-state [:sync :buffer])]
-               [:li (pr-str operation)])]
-        [:ul [:li "Buffer is empty"]])])])
+   [editor-input]
+   (when (pending?) [buffer-log])])
 
 
 ;; ========= Set up some initialization =========
@@ -181,7 +190,6 @@
   (fetch-remote-document)
   (recv-queue)
   (run))
-
 
 ;; ========= Kick things off =========
 
