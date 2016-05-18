@@ -10,7 +10,8 @@
             [ring.adapter.jetty :refer [run-jetty]]
             [taoensso.sente :as sente]
             [taoensso.sente.server-adapters.http-kit :refer (sente-web-server-adapter)]
-            [plaintext.documents :as doc])
+            [plaintext.documents :as doc]
+            [othello.store :as store])
   (:gen-class))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn connected-uids]}
@@ -63,7 +64,7 @@
     (server)))
 
 (defn reset-state! []
-  (doc/reset!)
+  (doc/init)
   (broadcast! :browser/refresh true))
 
 (defn -main [& [port]]

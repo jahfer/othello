@@ -3,6 +3,7 @@
 /.lein-*
 /.nrepl-port
 /.repl
+/.cljs_rhino_repl/
 /checkouts/
 /classes/
 /lib/

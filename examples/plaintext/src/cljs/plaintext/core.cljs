@@ -67,7 +67,7 @@
     (swap! app-state assoc-in [:sync :pending-operation] [])
     (swap! app-state assoc-in [:sync :buffer] [])
     (when (seq buffer)
-      (sync! (compose-operations buffer)))))
+      (sync! (into {} (compose-operations buffer))))))
 
 (defn ack! [id]
   (swap! app-state assoc-in [:sync :last-seen-id] id)
@@ -111,7 +111,7 @@
 
 (defn receive [{:keys [id client-id operations]}]
   (let [pending-operation (get-in @app-state [:sync :pending-operation :client-id])]
-    (if (and (not (nil? pending-operation)) (= client-id pending-operation))
+    (if (and pending-operation (= client-id pending-operation))
       (ack! id)
       (do (apply! operations)
           (when (not (pending?)) ;; need to fix for local change when buffering
